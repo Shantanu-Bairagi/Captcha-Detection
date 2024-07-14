@@ -1,0 +1,148 @@
+from google.colab import drive
+drive.mount('/content/drive')
+%cd '/content/drive/MyDrive/assn2/train'
+
+import cv2
+from google.colab.patches import cv2_imshow #for image display
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import time as tm
+
+def rotate_image(image, angle):
+  image_center = tuple(np.array(image.shape[1::-1]) / 2)
+  rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+  result = cv2.warpAffine(image, rot_mat, image.shape[1::-1], flags=cv2.INTER_LINEAR)
+  return result
+
+def thin_lines(image, kernel_size):
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))  # create a structuring element for erosion
+    thinned = cv2.erode(binary, kernel, iterations=1)
+
+    return thinned
+
+import numpy as np
+import concurrent.futures
+
+folder_path = '/content/drive/MyDrive/assn2/train'
+
+
+file = open( os.path.join(folder_path, 'labels.txt'), "r" )
+y_train1=file.read().splitlines()
+file.close()
+
+def process_coordinate(h, v):
+    # Your code for processing each coordinate goes here
+    lim = 90
+
+    y1 = np.zeros(num_test, dtype=int)
+    for k in range(num_test):
+        if y_train1[k] == 'EVEN':
+            y1[k] = 1
+
+    predictions = np.zeros(num_test, dtype=int)
+    angles = [-30, -20, -10, 0, 10, 20, 30]
+    folder_path = '/content/drive/MyDrive/assn2/reference'
+    filepaths = [os.path.join(folder_path, '%d.png') % i for i in range(16)]
+    ref_imgs = np.empty((16, 7), dtype=object)
+
+    for j in range(16):
+        f = filepaths[j]
+        ref = cv2.imread(f)
+        l = ref[h:90 + h, v:90 + v]
+        l = thin_lines(l, 2)
+        l = cv2.resize(l, (lim, lim))
+        for i in range(7):
+            a = angles[i]
+            rotated = rotate_image(l, a)
+            ref_imgs[j][i] = rotated
+
+    ref_imgs = np.array(ref_imgs)
+    pred = np.zeros([16, 7])
+
+    for f in range(num_test):
+        img = cv2.imread('%d.png' % f)
+        k = img[10:100, 360:450]
+        k = thin_lines(k, 2)
+        k_resized = cv2.resize(k, (lim, lim))
+
+        for i in range(16):
+            for j in range(7):
+                l_resized = ref_imgs[i][j]
+                m = np.subtract(k_resized, l_resized)
+                sum = np.sum(m[0:lim, 0:lim])
+                avg = sum
+                pred[i, j] = avg
+
+        pos = np.argwhere(pred == np.min(pred))
+        o = pos[0, 0]
+
+        if o == 0 or o == 2 or o == 4 or o == 6 or o == 8 or o == 10 or o == 12 or o == 14:
+            predictions[f] = 1
+
+    accuracy = np.mean(predictions == y1[:num_test])
+    return (h, v, accuracy)
+
+if __name__ == "__main__":
+    num_test = 2000  # Update with the actual value
+    crop = np.zeros((11, 11))  # Initialize the crop matrix
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = [executor.submit(process_coordinate, h, v) for h in range(11) for v in range(11)]
+
+        for future in concurrent.futures.as_completed(results):
+            h, v, accuracy = future.result()
+            crop[h][v] = accuracy
+
+    # Print the crop matrix
+    print(crop)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Crop matrix
+crop = np.array([[0.5335, 0.521, 0.6205, 0.6105, 0.5365, 0.4955, 0.4715, 0.536, 0.565, 0.5405, 0.5465],
+                 [0.5555, 0.623, 0.703, 0.683, 0.6295, 0.514, 0.5, 0.52, 0.508, 0.517, 0.4945],
+                 [0.6285, 0.747, 0.8055, 0.8165, 0.7635, 0.6335, 0.5235, 0.5235, 0.501, 0.479, 0.4825],
+                 [0.753, 0.8265, 0.912, 0.9095, 0.877, 0.737, 0.564, 0.556, 0.503, 0.4755, 0.478],
+                 [0.8295, 0.952, 0.9985, 0.997, 0.937, 0.807, 0.585, 0.5235, 0.4815, 0.467, 0.503],
+                 [0.859, 0.9835, 0.998, 0.998, 0.9575, 0.7785, 0.5905, 0.55, 0.4955, 0.49, 0.4705],
+                 [0.841, 0.9725, 0.9995, 0.976, 0.887, 0.733, 0.5885, 0.5545, 0.504, 0.5025, 0.505],
+                 [0.787, 0.8945, 0.918, 0.859, 0.7715, 0.6815, 0.5785, 0.5395, 0.5365, 0.518, 0.507],
+                 [0.7395, 0.8165, 0.827, 0.77, 0.697, 0.6025, 0.581, 0.567, 0.5815, 0.5275, 0.523],
+                 [0.583, 0.659, 0.6755, 0.6345, 0.5935, 0.557, 0.574, 0.5625, 0.525, 0.5365, 0.5275],
+                 [0.531, 0.591, 0.577, 0.584, 0.549, 0.5365, 0.534, 0.5445, 0.494, 0.5015, 0.551]])
+
+# Reshape the crop matrix
+Z = crop.reshape(crop.shape[0], crop.shape[1])
+
+# Create meshgrid for coordinates
+x = np.arange(crop.shape[1])
+y = np.arange(crop.shape[0])
+X, Y = np.meshgrid(x, y)
+
+# Set figure and axis
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+# Create 2D heatmap plot
+heatmap = ax.imshow(Z, cmap='viridis', interpolation='nearest', aspect='auto')
+
+# Set ticks and labels
+ax.set_xticks(np.arange(crop.shape[1]))
+ax.set_yticks(np.arange(crop.shape[0]))
+ax.set_xticklabels(x)
+ax.set_yticklabels(y)
+ax.set_xlabel('Vertical Crop (0:90) to (10:100)')
+ax.set_ylabel('Horizontal Crop (0:90) to (10:100)')
+ax.set_title('Accuracy Map (90x90 - No Resizing)')
+
+# Add colorbar
+cbar = fig.colorbar(heatmap)
+
+# Show the plot
+plt.show()
