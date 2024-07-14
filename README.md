@@ -69,7 +69,7 @@ pip install opencv-python-headless numpy matplotlib
 
 1. Clone the repository:
 ```sh
-git clone https://github.com/yourusername/captcha-detection.git
+git clone https://github.com/Shantanu-Bairagi/captcha-detection.git
 cd captcha-detection
 ```
 
